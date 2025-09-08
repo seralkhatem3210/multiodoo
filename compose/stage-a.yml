@@ -1,4 +1,5 @@
 version: "3.8"
+
 services:
   db:
     image: postgres:16
@@ -11,15 +12,15 @@ services:
     restart: unless-stopped
 
   odoo:
-    image: ghcr.io/seralkhatem3210/multiodoo:${GIT_REF:-latest}   # ✅
+    image: ghcr.io/seralkhatem3210/multiodoo:${GIT_REF:-latest}
     depends_on: [db]
     environment:
       ODOO_DB_PASSWORD: ${POSTGRES_PASSWORD}
       ODOO_ADMIN_PASSWORD: ${ODOO_ADMIN_PASSWORD}
       AUTO_UPGRADE_MODULES: "1"
-      UPGRADE_LIST: "base,web"  # ✅ أضف وحداتك
+      UPGRADE_LIST: "base,web"
     volumes:
       - ./odoo_data:/var/lib/odoo
-    # إن أردت منفذ مباشر لهذه الستيج:
-    ports: ["10020:8069"]
+    ports:
+      - "10020:8069"
     restart: unless-stopped
