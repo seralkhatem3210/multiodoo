@@ -8,19 +8,26 @@ services:
       POSTGRES_USER: odoo
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
-      - ./pgdata:/var/lib/postgresql/data
+      - /var/odoo/project/staging/pgdata:/var/lib/postgresql/data   # ✅ مسار بياناتك
     restart: unless-stopped
 
   odoo:
-    image: ghcr.io/seralkhatem3210/multiodoo:${GIT_REF:-latest}
+    image: ghcr.io/YOUR_GH_ORG/YOUR_REPO:staging-${GIT_REF:-latest} # ✅ غيّر org/repo
     depends_on: [db]
     environment:
       ODOO_DB_PASSWORD: ${POSTGRES_PASSWORD}
       ODOO_ADMIN_PASSWORD: ${ODOO_ADMIN_PASSWORD}
       AUTO_UPGRADE_MODULES: "1"
-      UPGRADE_LIST: "base,web"
+      UPGRADE_LIST: "base,web"                                      # ✅ أضف وحداتك
     volumes:
-      - ./odoo_data:/var/lib/odoo
+      - /var/odoo/project/staging/odoo_data:/var/lib/odoo           # ✅ مسارك
     ports:
-      - "10020:8069"
+      - "10022:8069"                                                # ✅ إن أردت منفذ مباشر
+    restart: unless-stopped
+
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    command: tunnel run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN}                      # ✅ لو تستخدم Tunnel
     restart: unless-stopped

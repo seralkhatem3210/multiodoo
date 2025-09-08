@@ -1,4 +1,5 @@
 version: "3.8"
+
 services:
   db:
     image: postgres:16
@@ -7,18 +8,25 @@ services:
       POSTGRES_USER: odoo
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
-      - ./pgdata:/var/lib/postgresql/data
+      - /var/odoo/project/prod/pgdata:/var/lib/postgresql/data       # ✅
     restart: unless-stopped
 
   odoo:
-    image: ghcr.io/seralkhatem3210/multiodoo:${GIT_REF:-latest}   # ✅
+    image: ghcr.io/YOUR_GH_ORG/YOUR_REPO:${GIT_REF:-latest}          # tag = vX.Y.Z
     depends_on: [db]
     environment:
       ODOO_DB_PASSWORD: ${POSTGRES_PASSWORD}
       ODOO_ADMIN_PASSWORD: ${ODOO_ADMIN_PASSWORD}
       AUTO_UPGRADE_MODULES: "1"
-      UPGRADE_LIST: "base,web"  # ✅
+      UPGRADE_LIST: "base,web"                                       # ✅
     volumes:
-      - ./odoo_data:/var/lib/odoo
-    ports: ["10021:8069"]
+      - /var/odoo/project/prod/odoo_data:/var/lib/odoo               # ✅
+    # بدون منافذ إن كنت خلف Nginx/Cloudflare
+    restart: unless-stopped
+
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    command: tunnel run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN}                       # ✅
     restart: unless-stopped

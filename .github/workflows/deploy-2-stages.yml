@@ -1,56 +1,60 @@
-name: Deploy Two Stagings
+name: Deploy (Staging & Prod)
 
 on:
   push:
-    branches: [ staging ]     # ادفع إلى فرع staging للنشر
-  workflow_dispatch:
+    branches: [ staging ]
+    tags: [ 'v*.*.*' ]
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        stage:
-          - name: stage-a
-            env: staging-a
-            remote_dir: /home/deploy/odoo/stage-a
-            compose_src: compose/stage-a.yml
-            project: stagea
-          - name: stage-b
-            env: staging-b
-            remote_dir: /home/deploy/odoo/stage-b
-            compose_src: compose/stage-b.yml
-            project: stageb
-
-    environment: ${{ matrix.stage.env }}
-
     steps:
       - uses: actions/checkout@v4
 
       - name: Start SSH agent
         uses: webfactory/ssh-agent@v0.9.0
         with:
-          ssh-private-key: ${{ secrets.SSH_KEY }}
+          ssh-private-key: ${{ github.ref_type == 'tag' && secrets.SSH_KEY_PROD || secrets.SSH_KEY_STAGING }}
 
-      - name: Upload compose file
+      - name: Select target
+        id: target
         run: |
-          rsync -avz -e "ssh -o StrictHostKeyChecking=no" \
-            ${{ matrix.stage.compose_src }} \
-            ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ matrix.stage.remote_dir }}/compose.yml
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            echo "host=${{ secrets.SSH_HOST_PROD }}"   >> $GITHUB_OUTPUT
+            echo "user=${{ secrets.SSH_USER_PROD }}"   >> $GITHUB_OUTPUT
+            echo "compose=compose/stage-b.yml"         >> $GITHUB_OUTPUT
+            echo "pg=${{ secrets.POSTGRES_PASSWORD_PROD }}"     >> $GITHUB_OUTPUT
+            echo "admin=${{ secrets.ODOO_ADMIN_PASSWORD_PROD }}" >> $GITHUB_OUTPUT
+            echo "tunnel=${{ secrets.CLOUDFLARE_TUNNEL_TOKEN_PROD }}" >> $GITHUB_OUTPUT
+            echo "gitref=${{ github.ref_name }}"       >> $GITHUB_OUTPUT   # tag نفسه
+          else
+            echo "host=${{ secrets.SSH_HOST_STAGING }}" >> $GITHUB_OUTPUT
+            echo "user=${{ secrets.SSH_USER_STAGING }}" >> $GITHUB_OUTPUT
+            echo "compose=compose/stage-a.yml"          >> $GITHUB_OUTPUT
+            echo "pg=${{ secrets.POSTGRES_PASSWORD_STAGING }}"     >> $GITHUB_OUTPUT
+            echo "admin=${{ secrets.ODOO_ADMIN_PASSWORD_STAGING }}" >> $GITHUB_OUTPUT
+            echo "tunnel=${{ secrets.CLOUDFLARE_TUNNEL_TOKEN_STAGING }}" >> $GITHUB_OUTPUT
+            echo "gitref=${{ github.sha }}"             >> $GITHUB_OUTPUT
+          fi
+
+      - name: Upload compose
+        run: |
+          rsync -avz -e "ssh -o StrictHostKeyChecking=no" ${{ steps.target.outputs.compose }} \
+            ${{ steps.target.outputs.user }}@${{ steps.target.outputs.host }}:~/odoo/compose.yml
 
       - name: Remote deploy
         env:
           REGISTRY_USERNAME: ${{ secrets.REGISTRY_USERNAME }}
-          REGISTRY_TOKEN: ${{ secrets.REGISTRY_TOKEN }}
+          REGISTRY_TOKEN:    ${{ secrets.REGISTRY_TOKEN }}
         run: |
-          ssh -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << 'EOF'
+          ssh -o StrictHostKeyChecking=no ${{ steps.target.outputs.user }}@${{ steps.target.outputs.host }} << 'EOF'
           set -e
-          cd ${{ matrix.stage.remote_dir }}
-          export POSTGRES_PASSWORD='${{ secrets.POSTGRES_PASSWORD }}'
-          export ODOO_ADMIN_PASSWORD='${{ secrets.ODOO_ADMIN_PASSWORD }}'
-          export GIT_REF='${{ github.sha }}'
-          docker login ghcr.io -u ${{ env.REGISTRY_USERNAME }} -p ${{ env.REGISTRY_TOKEN }}
-          COMPOSE_PROJECT_NAME=${{ matrix.stage.project }} docker compose --env-file <(env | egrep 'POSTGRES_PASSWORD|ODOO_ADMIN_PASSWORD|GIT_REF') -f compose.yml pull
-          COMPOSE_PROJECT_NAME=${{ matrix.stage.project }} docker compose --env-file <(env | egrep 'POSTGRES_PASSWORD|ODOO_ADMIN_PASSWORD|GIT_REF') -f compose.yml up -d --remove-orphans
+          export POSTGRES_PASSWORD='${{ steps.target.outputs.pg }}'
+          export ODOO_ADMIN_PASSWORD='${{ steps.target.outputs.admin }}'
+          export CLOUDFLARE_TUNNEL_TOKEN='${{ steps.target.outputs.tunnel }}'
+          export GIT_REF='${{ steps.target.outputs.gitref }}'
+          docker login ghcr.io -u '${{ env.REGISTRY_USERNAME }}' -p '${{ env.REGISTRY_TOKEN }}'
+          docker compose -f ~/odoo/compose.yml pull
+          docker compose -f ~/odoo/compose.yml up -d --remove-orphans
           docker system prune -f
           EOF

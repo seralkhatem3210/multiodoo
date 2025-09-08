@@ -1,0 +1,9 @@
+[MASTER]
+load-plugins=pylint_odoo
+jobs=0
+
+[MESSAGES CONTROL]
+disable=missing-module-docstring,missing-class-docstring,missing-function-docstring
+
+[ODOOLINT]
+valid_odoo_versions=18.0
