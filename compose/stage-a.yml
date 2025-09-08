@@ -11,7 +11,7 @@ services:
     restart: unless-stopped
 
   odoo:
-    image: ghcr.io/YOUR_ORG/YOUR_REPO:${GIT_REF:-latest}   # ✅
+    image: ghcr.io/seralkhatem3210/multiodoo:${GIT_REF:-latest}   # ✅
     depends_on: [db]
     environment:
       ODOO_DB_PASSWORD: ${POSTGRES_PASSWORD}
