@@ -1,0 +1,24 @@
+version: "3.8"
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: odoo
+      POSTGRES_USER: odoo
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - ./pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  odoo:
+    image: ghcr.io/YOUR_ORG/YOUR_REPO:${GIT_REF:-latest}   # ✅
+    depends_on: [db]
+    environment:
+      ODOO_DB_PASSWORD: ${POSTGRES_PASSWORD}
+      ODOO_ADMIN_PASSWORD: ${ODOO_ADMIN_PASSWORD}
+      AUTO_UPGRADE_MODULES: "1"
+      UPGRADE_LIST: "base,web"  # ✅
+    volumes:
+      - ./odoo_data:/var/lib/odoo
+    ports: ["10021:8069"]
+    restart: unless-stopped
